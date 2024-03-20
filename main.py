@@ -3,7 +3,7 @@ import random
 import threading
 import traceback
 from customtkinter import *
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyClientCredentials,SpotifyOAuth
 import spotipy
 import pickle
 import subprocess
@@ -12,6 +12,7 @@ import youtube_dl
 from functools import partial
 import time as t
 from better_profanity import profanity
+import math
 
 popularity_cache = dict()
 
@@ -41,7 +42,14 @@ POPULARITY_CONSTRAINT = 80
 PROFANITY_ALLOWED= False
 EXCLUDE_WORDS= ["Skit","Version", "Instrumental", "Interlude","Acapella","Extended","Acoustic","Remix","Demo","Intro","Medley", "Original Mix", "Radio Edit", "Extended Mix", "Club Mix", "Dance Remix", "Acoustic Version", "Instrumental Version", "Vocal Version", "Remix Version", "Official Video", "Live Performance", "Studio Recording", "Unplugged Version", "Demo Version", "Karaoke Version", "Single Version", "Album Version", "Explicit Version", "Clean Version", "Radio Version"]
 EXCLUDE_REPETITION_OF = {"(":2}
+redirect_uri = 'http://localhost:8080/callback/'
 
+
+#
+songnames = []
+links = []
+artistsSelected = dict()
+song_ids_for_seed = list()
 
 
 
@@ -67,171 +75,306 @@ def check_song_popularity(song_name):
 
 
 
-root = CTk()
-root.title("Select Artists You Want")
-
-artistsSelected = dict()
-songnames = []
-links = []
+preference = CTk()
+preference.title("Song Selection")
 
 
-def select_artist(i, name,uri):
-    if name not in artistsSelected:
-        artistsSelected[name] = uri
-    else:
-        del artistsSelected[name]
-    refresh_selected_list()
-
-def refresh_selected_list():
-
-    for child in selectedframe.winfo_children():
-        child.destroy()
+def select_option(option):
+    preference.destroy()
     
-    for i,artist in enumerate(artistsSelected):
-        CTkLabel(selectedframe,text = artist ).grid(row =i, column = 0)
-    
+    if option == "artist":
 
-def search_spotify():
-    global sp
-    query = entry.get()
-    if query:
-        global results
-        try:
-            results = sp.search(q=query,type='artist' ,limit=10)
-            
-            for child in resultsframe.winfo_children():
+        root = CTk()
+        root.title("Select Artists You Want")
+
+        artistsSelected = dict()
+        def select_artist(i,name,uri):
+            if name not in artistsSelected:
+                artistsSelected[name] = uri
+            else:
+                del artistsSelected[name]
+            refresh_selected_list()
+
+        def refresh_selected_list():
+
+            for child in selectedframe.winfo_children():
                 child.destroy()
-          
-            global checkboxes
-            checkboxes = dict()
-            for i, artist in enumerate(results['artists']['items']):
-                CTkLabel(resultsframe,text = artist["name"] ).grid(row =i, column = 0)
-                checkboxes[i] = CTkCheckBox(resultsframe,text = "" ,command=partial(select_artist,i,artist["name"],artist['uri']))
-                checkboxes[i].grid(row =i, column = 1)
-        except Exception as e:
-           print(traceback.format_exception(e))
-    else:
-        print("")
-    
-        
-
-
-searchbar = CTkFrame(root,width = 500)
-searchbar.grid(row = 0, column = 0)
-
-label = CTkLabel(searchbar, text="Enter Artist name:")
-label.grid(row=0, column=0, sticky='W',padx = 15)
-
-entry = CTkEntry(searchbar)
-entry.grid(row=0, column=1,padx = 15)
-
-search_button = CTkButton(searchbar, text="Search", command=search_spotify)
-search_button.grid(row=0, column=2, padx = 15)
-
-mainframe = CTkFrame(root,width=500, height=500)
-mainframe.grid(row = 1, column = 0,padx = 15, pady = 10)
-
-resultsframe = CTkFrame(mainframe, width = 230,height = 490,)
-resultsframe.grid(row = 0, column =0,  padx = 10, pady =5)
-
-selectedframe = CTkFrame(mainframe, width = 230,height = 490,)
-selectedframe.grid(row = 0, column = 1, padx = 10, pady =5)
-
-startgame = CTkButton(root,text="Start Game",command= root.destroy)
-startgame.grid(row =2, column =0)
-
-root.mainloop()
-
-
-wait = CTk()
-wait.title("Loading...")
-wait.eval('tk::PlaceWindow . center')
-wait.attributes('-topmost',True)
-
-ydl_opts = {
-            'quiet': True,
-            'extract_flat': True,
-            'skip_download': True,
-        }
-
-
-def get_yt_links():
-    global links
-    global songnames
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        for song in songnames:
-            result = ydl.extract_info(f'ytsearch:{song}', download=False)
-            videos = result['entries']
-            link = "https://www.youtube.com/watch?v="+videos[0]['url']
-            links.append(link)
+            
+            for i,artist in enumerate(artistsSelected):
+                CTkLabel(selectedframe,text = artist ).grid(row =i, column = 0)
             
 
+        def search_spotify():
+            global sp
+            query = entry.get()
+            if query:
+                global results
+                try:
+                    results = sp.search(q=query,type='artist' ,limit=10)
+                    
+                    for child in resultsframe.winfo_children():
+                        child.destroy()
+                
+                    global checkboxes
+                    checkboxes = dict()
+                    for i, artist in enumerate(results['artists']['items']):
+                        CTkLabel(resultsframe,text = artist["name"] ).grid(row =i, column = 0)
+                        checkboxes[i] = CTkCheckBox(resultsframe,text = "" ,command=partial(select_artist,i,artist["name"],artist['uri']))
+                        checkboxes[i].grid(row =i, column = 1)
+                except Exception as e:
+                    print(traceback.format_exception(e))
+            else:
+                print("")
+            
 
-def get_tracks_list(artist, artist_id):
-    song_list = []
-    global sp
-    albums = sp.artist_albums(artist_id[15:])
-    song = []
-    for album in albums["items"]:
-        song += sp.album_tracks(album["id"])["items"]
-       
-    for i in song:
+        searchbar = CTkFrame(root,width = 500)
+        searchbar.grid(row = 0, column = 0)
 
-        song_list.append(i['name'] + " - " + artist)
-    return song_list
+        label = CTkLabel(searchbar, text="Enter Artist name:")
+        label.grid(row=0, column=0, sticky='W',padx = 15)
 
-def song_proccessing_main():
-    global songnames
-    for artist, artist_id in artistsSelected.items():
-        songnames += get_tracks_list(artist,artist_id)
+        entry = CTkEntry(searchbar)
+        entry.grid(row=0, column=1,padx = 15)
 
-    for i in songnames:
-        pop = check_song_popularity(i)
-        if pop < POPULARITY_CONSTRAINT:
-            songnames.remove(i)
-            print("Song -",i,"removed due to low popularity")
+        search_button = CTkButton(searchbar, text="Search", command=search_spotify)
+        search_button.grid(row=0, column=2, padx = 15)
 
-    if PROFANITY_ALLOWED == False:
-        for i in songnames:
-            if profanity.contains_profanity(i):
-                songnames.remove(i)
+        mainframe = CTkFrame(root,width=500, height=500)
+        mainframe.grid(row = 1, column = 0,padx = 15, pady = 10)
 
-    for i in songnames:
-        for j in EXCLUDE_WORDS:
-            if j.lower() in i.lower():
-                songnames.remove(i)
-                break
+        resultsframe = CTkFrame(mainframe, width = 230,height = 490,)
+        resultsframe.grid(row = 0, column =0,  padx = 10, pady =5)
+
+        selectedframe = CTkFrame(mainframe, width = 230,height = 490,)
+        selectedframe.grid(row = 0, column = 1, padx = 10, pady =5)
+
+        startgame = CTkButton(root,text="Start Game",command= root.destroy)
+        startgame.grid(row =2, column =0)
+
+        root.mainloop()
+
+        wait = CTk()
+        wait.title("Loading...")
+        wait.eval('tk::PlaceWindow . center')
+        wait.attributes('-topmost',True)
+
+        ydl_opts = {
+                    'quiet': True,
+                    'extract_flat': True,
+                    'skip_download': True,
+                }
+
+
+        def get_yt_links():
+            global links
+            global songnames
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                for song in songnames:
+                    result = ydl.extract_info(f'ytsearch:{song}', download=False)
+                    videos = result['entries']
+                    link = "https://www.youtube.com/watch?v="+videos[0]['url']
+                    links.append(link)
+                    
+
+
+        def get_tracks_list(artist, artist_id):
+            song_list = []
+            global sp
+            albums = sp.artist_albums(artist_id[15:])
+            song = []
+            for album in albums["items"]:
+                song += sp.album_tracks(album["id"])["items"]
+            
+            for i in song:
+
+                song_list.append(i['name'] + " - " + artist)
+            return song_list
+
+        def song_proccessing_main():
+            global songnames
+            for artist, artist_id in artistsSelected.items():
+                songnames += get_tracks_list(artist,artist_id)
+
+            for i in songnames:
+                pop = check_song_popularity(i)
+                if pop < POPULARITY_CONSTRAINT:
+                    songnames.remove(i)
+                    print("Song -",i,"removed due to low popularity")
+
+            if PROFANITY_ALLOWED == False:
+                for i in songnames:
+                    if profanity.contains_profanity(i):
+                        songnames.remove(i)
+
+            for i in songnames:
+                for j in EXCLUDE_WORDS:
+                    if j.lower() in i.lower():
+                        songnames.remove(i)
+                        break
+            
+            for i in songnames:
+                for char, rep in EXCLUDE_REPETITION_OF.items():
+                    if (i.lower()).count(char.lower()) >= rep:
+                        songnames.remove(i)
+                        break
+            
+            random.shuffle(songnames)
+
+            if len(songnames) > 100:
+                songnames = songnames[:100]
+
+            threading.Thread(target = get_yt_links,daemon= True).start()
+            t.sleep(10)
+            waitlabel.configure(text = "Done! Click Continue")
+            kill.configure(state = 'normal')
+
+
+
+        wait.after(2000,threading.Thread(target=song_proccessing_main,daemon= True).start)
+
+        waitlabel = CTkLabel(wait,text=" Please Wait as the songs are being processed")
+        waitlabel.grid(row = 0, column = 0,pady = 10, padx = 15)
+
+        status = CTkLabel(wait,text = "Status :  Initializing")
+        status.grid(row = 1, column = 0)
+
+        kill = CTkButton(wait,text = "continue",command=wait.destroy,state="disabled")
+        kill.grid(row = 2, column = 0)
+
+        wait.mainloop()
+
+    elif option == "profile":
+
+        
+        root = CTk()
+        
+        CTkLabel(root,text = "Select number of users that need to login").pack()
+
+        def spotify_auth():
+            global songnames
+            global song_ids_for_seed
+            scope = "user-top-read"
+            sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id= CLIENT_ID,client_secret=CLIENT_SECRET,redirect_uri=redirect_uri,scope=scope,show_dialog= True))
+            
+            for term in ["long_term","short_term","medium_term"]:
+                user_top_tracks = sp.current_user_top_tracks(limit=50,time_range=term)
+                songnames += [(track['name'] + " - " + track["artists"][0]["name"]) for track in user_top_tracks['items']]
+                song_ids_for_seed += [track['id'] for track in user_top_tracks['items']]
+            os.remove(".cache")
+
+
+        def submit():
+            
+            n = int(num_users.get())
+            for i in range(n):
+                spotify_auth()
+            root.destroy()
+
+        num_users = CTkEntry(root)
+        num_users.pack()
+        CTkButton(root,text = "Go",command=submit).pack()
+        root.mainloop()
+
+        wait = CTk()
+        wait.title("Loading...")
+        wait.eval('tk::PlaceWindow . center')
+        wait.attributes('-topmost',True)
+
+        ydl_opts = {
+                    'quiet': True,
+                    'extract_flat': True,
+                    'skip_download': True,
+                }
+
+
+        def get_yt_links():
+            global links
+            global songnames
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                for song in songnames:
+                    result = ydl.extract_info(f'ytsearch:{song}', download=False)
+                    videos = result['entries']
+                    link = "https://www.youtube.com/watch?v="+videos[0]['url']
+                    links.append(link)
+                    
+
+
+        def get_tracks_list():
+            global songnames
+            global song_ids_for_seed
+            #gets recomendation from spotify ,dont confuse with the one in the if clause
+            
+            seed_lists = [song_ids_for_seed[5*i:5*i+5] for i in range(0,math.ceil(len(song_ids_for_seed)/5))]
+
+            print(len(seed_lists))
+            
+            for seed_list in seed_lists:
+                recommendations = sp.recommendations(seed_tracks=seed_list, limit=2)
+                recommended_songs = [(track['name'] + " - " + track["artists"][0]["name"]) for track in recommendations['tracks']]
+                songnames += recommended_songs
+                print("Recomedations Generated")
+
+
+
+        def song_proccessing_main():
+            global songnames
+            songnames = list(set(songnames)) #removes dupicates
+
+            print("Songs before recomendation :",len(songnames))
+            get_tracks_list()
+            print("Songs after recomendation :",len(songnames))
+
+            if PROFANITY_ALLOWED == False:
+                for i in songnames:
+                    if profanity.contains_profanity(i):
+                        songnames.remove(i)
+
+            songnames = list(set(songnames)) #removes dupicates
+
+            random.shuffle(songnames)
+
+            
+
+            if len(songnames) > 100:
+                songnames = songnames[:100]
+
+            threading.Thread(target = get_yt_links,daemon= True).start()
+            t.sleep(10)
+            waitlabel.configure(text = "Done! Click Continue")
+            kill.configure(state = 'normal')
+
+
+
+        wait.after(2000,threading.Thread(target=song_proccessing_main,daemon= True).start)
+
+        waitlabel = CTkLabel(wait,text=" Please Wait as the songs are being processed")
+        waitlabel.grid(row = 0, column = 0,pady = 10, padx = 15)
+
+        status = CTkLabel(wait,text = "Status :  Initializing")
+        status.grid(row = 1, column = 0)
+
+        kill = CTkButton(wait,text = "continue",command=wait.destroy,state="disabled")
+        kill.grid(row = 2, column = 0)
+
+        wait.mainloop()        
+
+
+
+
     
-    for i in songnames:
-        for char, rep in EXCLUDE_REPETITION_OF.items():
-            if (i.lower()).count(char.lower()) >= rep:
-                songnames.remove(i)
-                break
+CTkLabel(preference, text="How would you like to select songs?").pack()
+
+option_frame = CTkFrame(preference)
+option_frame.pack()
     
-    random.shuffle(songnames)
+artist_button = CTkButton(option_frame, text="Select songs by artist", command=partial(select_option,"artist"))
+artist_button.grid(row=0, column=0, padx=10, pady=5)
 
-    if len(songnames) > 100:
-        songnames = songnames[:100]
+spotify_button = CTkButton(option_frame, text="Select songs from Spotify profile", command=partial(select_option,"profile"))
+spotify_button.grid(row=0, column=1, padx=10, pady=5)
 
-    threading.Thread(target = get_yt_links,daemon= True).start()
-    t.sleep(10)
-    waitlabel.configure(text = "Done! Click Continue")
-    kill.configure(state = 'normal')
+preference.mainloop()
 
-
-
-wait.after(2000,threading.Thread(target=song_proccessing_main,daemon= True).start)
-
-waitlabel = CTkLabel(wait,text=" Please Wait as the songs are being processed")
-waitlabel.grid(row = 0, column = 0,pady = 10, padx = 15)
-
-status = CTkLabel(wait,text = "Status :  Initializing")
-status.grid(row = 1, column = 0)
-
-kill = CTkButton(wait,text = "continue",command=wait.destroy,state="disabled")
-kill.grid(row = 2, column = 0)
-
-wait.mainloop()
 
 counter = 0
 answerShown = False
