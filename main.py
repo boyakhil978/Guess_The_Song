@@ -32,8 +32,11 @@ def cleanup():
 
 
 #APP CONSTANTS PROCEED WITH CAUTION
-CLIENT_ID = 'ee7a64d6c3fd4b229fa7f94857f3163a'
-CLIENT_SECRET = '0b6f8677c46644cbb8bdbd51975bacd1'
+with open("APP.CRED","rb") as f:
+    rec = pickle.load(f)
+    CLIENT_ID = rec[0]
+    CLIENT_SECRET = rec[1]
+
 POPULARITY_CONSTRAINT = 80
 PROFANITY_ALLOWED= False
 EXCLUDE_WORDS= ["Skit","Version", "Instrumental", "Interlude","Acapella","Extended","Acoustic","Remix","Demo","Intro","Medley", "Original Mix", "Radio Edit", "Extended Mix", "Club Mix", "Dance Remix", "Acoustic Version", "Instrumental Version", "Vocal Version", "Remix Version", "Official Video", "Live Performance", "Studio Recording", "Unplugged Version", "Demo Version", "Karaoke Version", "Single Version", "Album Version", "Explicit Version", "Clean Version", "Radio Version"]
