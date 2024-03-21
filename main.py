@@ -17,12 +17,13 @@ import math
 
 popularity_cache = dict()
 
-
+#Popularity Cache exists for the purpose to store a dictionary of song_name : popularity (to reduce api calls)
 if os.path.exists('popularity_cahce.dat'):
     with open('popularity_cahce.dat','rb') as f:
         popularity_cache = pickle.load(f)
 
 
+#Deletes .mp4 files generated during the usage of the app, Dont save any of your own .mp4 files in the app directory
 def cleanup():
     current_dir = os.getcwd()
     mp4_files = glob.glob(os.path.join(current_dir, '*.mp4'))
@@ -30,11 +31,13 @@ def cleanup():
         try:
             os.remove(mp4_file)
         except Exception as e:
-            print(f"Error deleting {mp4_file}: {e}")
+            pass #passing the exception that occurs because the file is use
 
 
-
-            
+CLIENT_ID = None
+CLIENT_SECRET = None
+#Checks for saved client_id and client_secret , else attempts to retrive from user
+#if corrupted just delete 'APP.CRED' file and reload app           
 if os.path.exists("APP.CRED"):
     with open("APP.CRED","rb") as f:
         rec = pickle.load(f)
@@ -52,25 +55,35 @@ else:
         webbrowser.open('https://www.youtube.com/watch?v=mBgg9i1ghNw') 
 
     def done():
+        global CLIENT_ID, CLIENT_SECRET
         if id_entry.get() == "":
             error.configure(text = "Client ID is Empty")
-        elif id_entry.get() == "":
-            error.configure(text = "Client ID is Empty")
+        elif secret_entry.get() == "":
+            error.configure(text = "Client Secret is Empty")
         else:
             try:
+
+                
                 ccm = SpotifyClientCredentials(client_id=id_entry.get(), client_secret=secret_entry.get())
                 s = spotipy.Spotify(client_credentials_manager=ccm)
 
+                CLIENT_ID = id_entry.get()
+                CLIENT_SECRET = secret_entry.get()
+
                 with open("APP.CRED","wb") as f:
-                    rec = [id_entry.get(),secret_entry.get()]
+                    rec = [CLIENT_ID,CLIENT_SECRET]
                     pickle.dump(rec,f)
 
                 for child in secret.winfo_children():
                     child.destroy()
+
                 
-                CTkTextbox(secret,text = "Logged in Succesfully \n In Order to use the app all users that need to login must be added").pack()
-                CTkButton(secret,text = "Add Users", command= partial(add_users,id_entry.get()))
-                CTkButton(text = "Done",command= secret.destroy())
+                
+                secret.geometry("1200x200")
+                CTkLabel(secret,text = "Logged in Succesfully \n In Order to use the app ALL USERS that need to login MUST be added online to spotify developer dashboard, INCLUDING YOU, THE APP WILL NOT WORK OTHERWISE",font = CTkFont(size = 15)).pack(pady = 10, padx = 15)
+                CTkButton(secret,text = "Add Users", command= partial(add_users,CLIENT_ID)).pack(pady = 10, padx = 15)
+                CTkButton(secret,text = "Done",command= secret.destroy).pack(pady = 10, padx = 15)
+
 
             except Exception as e:
                 error.configure(text = "Invalid Credentials :",end = " ")
@@ -78,7 +91,7 @@ else:
         
 
 
-    CTkLabel(secret,text = "In Order to use this app you must login using app credentials, Dont know how to get them click instructions").pack()
+    CTkLabel(secret,text = "In Order to use this app you must login using app credentials, Dont know how to get them? :click instructions").pack()
     CTkButton(secret,text = "Instructions",command=instructions).pack()
 
     CTkLabel(secret,text = "Client ID").pack()
