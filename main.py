@@ -15,6 +15,7 @@ import time as t
 import math
 
 popularity_cache = dict()
+total_queries_to_spotify = 0
 
 #Popularity Cache exists for the purpose to store a dictionary of song_name : popularity (to reduce api calls)
 if os.path.exists('popularity_cahce.dat'):
@@ -125,9 +126,9 @@ EXCLUDE_REPETITION_OF = {"(":2}
 #Excludes repetition of a certain charecter or word, say '(', given number of times
 #Usage : Add needed to dictionary with the charecter/word as key and number of repetitions or greater you want to exclude
 
-SONG_RECCOMENDATION_RATIO = 2 
-#Number of songs to reccomed for every 5 songs you have in your library, higher value = higher difficulty 
-#recomended value = 2 
+SONG_RECCOMENDATION_RATIO = 3 
+#Number of songs to recommend for every 10 songs you have in your library, higher value = higher difficulty 
+#recommended value = 3 
 
 redirect_uri = 'http://localhost:3036'
 #-----------------------------------------------
@@ -146,10 +147,12 @@ sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager,retri
 
 def check_song_popularity(song_name):
     global sp
+    global total_queries_to_spotify
     if song_name in popularity_cache:
         popularity = popularity_cache[song_name]
     else:
         results = sp.search(q=song_name, type='track',limit = 1)
+        total_queries_to_spotify += 1
 
         if len(results['tracks']['items']) == 0:
             print("Song not found.")
@@ -162,16 +165,23 @@ def check_song_popularity(song_name):
     return popularity
 
 
-
+preference_flow_succesful = False
+root_flow = False
+wait_flow = False
 preference = CTk()
 preference.title("Song Selection")
 
 
 def select_option(option):
+    global preference_flow_succesful
+    global root_flow
+    preference_flow_succesful = True
     preference.destroy()
     
     if option == "artist":
 
+
+        
         root = CTk()
         root.title("Select Artists You Want")
 
@@ -193,12 +203,14 @@ def select_option(option):
             
 
         def search_spotify():
+            global total_queries_to_spotify
             global sp
             query = entry.get()
             if query:
                 global results
                 try:
                     results = sp.search(q=query,type='artist' ,limit=10)
+                    total_queries_to_spotify += 1
                     
                     for child in resultsframe.winfo_children():
                         child.destroy()
@@ -236,10 +248,18 @@ def select_option(option):
         selectedframe = CTkFrame(mainframe, width = 230,height = 490,)
         selectedframe.grid(row = 0, column = 1, padx = 10, pady =5)
 
-        startgame = CTkButton(root,text="Start Game",command= root.destroy)
+        def start_game():
+            global root_flow
+            root_flow = True
+            root.destroy()
+
+        startgame = CTkButton(root,text="Start Game",command= start_game)
         startgame.grid(row =2, column =0)
 
         root.mainloop()
+
+        if root_flow == False:
+            exit()
 
         wait = CTk()
         wait.title("Loading...")
@@ -266,12 +286,15 @@ def select_option(option):
 
 
         def get_tracks_list(artist, artist_id):
+            global total_queries_to_spotify
             song_list = []
             global sp
             albums = sp.artist_albums(artist_id[15:])
+            total_queries_to_spotify += 1
             song = []
             for album in albums["items"]:
                 song += sp.album_tracks(album["id"])["items"]
+                total_queries_to_spotify += 1
             
             for i in song:
 
@@ -279,6 +302,7 @@ def select_option(option):
             return song_list
 
         def song_proccessing_main():
+            global wait_flow
             global songnames
             for artist, artist_id in artistsSelected.items():
                 songnames += get_tracks_list(artist,artist_id)
@@ -309,11 +333,15 @@ def select_option(option):
 
             threading.Thread(target = get_yt_links,daemon= True).start()
             t.sleep(10)
+
+            wait_flow = True
+            
             try:
                 kill.configure(state = 'normal')
                 waitlabel.configure(text = "Done! Click Continue")
             except:
                 pass
+            
             
 
 
@@ -331,6 +359,9 @@ def select_option(option):
 
         wait.mainloop()
 
+        if wait_flow == False:
+            exit()  
+
     elif option == "profile":
 
         
@@ -341,27 +372,60 @@ def select_option(option):
         def spotify_auth():
             global songnames
             global song_ids_for_seed
-            scope = "user-top-read"
+            global total_queries_to_spotify
+            scope = ["user-top-read","user-library-read"]
             sp = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id= CLIENT_ID,client_secret=CLIENT_SECRET,redirect_uri=redirect_uri,scope=scope,show_dialog= True))
             
             for term in ["long_term","short_term","medium_term"]:
                 user_top_tracks = sp.current_user_top_tracks(limit=50,time_range=term)
+                total_queries_to_spotify += 1
                 songnames += [(track['name'] + " - " + track["artists"][0]["name"]) for track in user_top_tracks['items']]
                 song_ids_for_seed += [track['id'] for track in user_top_tracks['items']]
+
+            saved_song_loop_count = 0
+            while True:
+                print("Users Saved Tracks")
+                user_saved_tracks = sp.current_user_saved_tracks(limit = 50, offset = (saved_song_loop_count * 50))
+                total_queries_to_spotify += 1
+                likedsongnames = [(track['track']['name'] + " - " + track['track']["artists"][0]["name"]) for track in user_saved_tracks['items']]
+                songnames += likedsongnames
+                
+                print("DEBUG: Liked Songs Processed: ",likedsongnames)
+
+                saved_song_loop_count += 1
+                
+                if len(likedsongnames) < 50:
+                    print("DEBUG: Done Processing Liked Songs")
+                    print("DEBUG: Songs Loops Processed To Get Saved Songs",saved_song_loop_count)
+
+                    break
+                elif saved_song_loop_count >= 10:
+                    break
+
             os.remove(".cache")
 
 
         def submit():
+            global root_flow
             
             n = int(num_users.get())
-            for i in range(n):
-                spotify_auth()
+            
+            try:
+                for i in range(n):
+                    spotify_auth()
+                root_flow = True
+            except Exception as e:
+                traceback.format_exception(e)
+
             root.destroy()
 
         num_users = CTkEntry(root)
         num_users.pack()
         CTkButton(root,text = "Go",command=submit).pack()
         root.mainloop()
+
+        if root_flow == False:
+            exit()
 
         wait = CTk()
         wait.title("Loading...")
@@ -387,29 +451,32 @@ def select_option(option):
                     
 
 
-        def get_tracks_list():
-            global songnames
-            global song_ids_for_seed
-            #gets recomendation from spotify ,dont confuse with the one in the if clause
-            
-            seed_lists = [song_ids_for_seed[5*i:5*i+5] for i in range(0,math.ceil(len(song_ids_for_seed)/5))]
-
-            
-            for seed_list in seed_lists:
-                
-                recommendations = sp.recommendations(seed_tracks=seed_list, limit=2)
-                recommended_songs = [(track['name'] + " - " + track["artists"][0]["name"]) for track in recommendations['tracks']]
-                songnames += recommended_songs
-                print("Recomedations Generated")
+        
 
 
 
         def song_proccessing_main():
             global songnames
+            global sp
+            global total_queries_to_spotify
+            global wait_flow
+
             songnames = list(set(songnames)) #removes dupicates
 
             print("Songs before recomendation :",len(songnames))
-            get_tracks_list()
+
+            topsongnames = []
+
+            for top_playlist_id in ["37i9dQZEVXbMDoHDwVN2tF","37i9dQZF1DXcBWIGoYBM5M"]:
+                temp_list = sp.playlist_tracks(playlist_id=top_playlist_id, limit = 50,fields='items(track(name, artists(name)))')
+                total_queries_to_spotify += 1
+                topsongnames += [(track['track']['name'] + " - " + track['track']["artists"][0]["name"]) for track in temp_list["items"]]
+
+            topsongnames = topsongnames[:((len(songnames)//10)*SONG_RECCOMENDATION_RATIO)]
+
+            songnames += topsongnames
+
+            #get_tracks_list()
             print("Songs after recomendation :",len(songnames))
 
 
@@ -424,6 +491,7 @@ def select_option(option):
 
             threading.Thread(target = get_yt_links,daemon= True).start()
             t.sleep(10)
+            wait_flow = True
             try:
                 kill.configure(state = 'normal')
                 waitlabel.configure(text = "Done! Click Continue")
@@ -444,7 +512,10 @@ def select_option(option):
         kill = CTkButton(wait,text = "continue",command=wait.destroy,state="disabled")
         kill.grid(row = 2, column = 0)
 
-        wait.mainloop()        
+        wait.mainloop()      
+
+        if wait_flow == False:
+            exit()  
 
 
 
@@ -463,6 +534,8 @@ spotify_button.grid(row=0, column=1, padx=10, pady=5)
 
 preference.mainloop()
 
+if preference_flow_succesful == False:
+    exit()
 
 counter = 0
 answerShown = False
@@ -640,3 +713,4 @@ with open('popularity_cahce.dat','wb') as f:
 
 stop_song()
 cleanup()
+print("Total Queries to spotify are:",str(total_queries_to_spotify))
