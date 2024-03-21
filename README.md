@@ -14,10 +14,11 @@ Experience the magic of trivia with this innovative game! Crafted in real-time, 
 ## Known Errors :
 1) When selecting by artist, the artist's more popular songs may be of a different language than what you would expect. This frequently happens to artists of regional songs.
 2) When selecting by artist, an artist's songs may dominate another artist's.
+3) Max Retries Exceeded, this happens when you overuse the app. If the app doesn't work or crashes with this exception restart it after 1 minute or change the app credentials
 
 These errors are being worked on and will be resolved. Feel free to contribute
 
 
 
 ## Disclaimer:    
-**This App Exists for educational purposes, not meant for commercial use or copyright infringement, use at your own risk**
+**This App Exists for educational purposes, is not meant for commercial use or copyright infringement, use at your risk**
