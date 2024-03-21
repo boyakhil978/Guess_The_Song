@@ -2,6 +2,7 @@ import glob
 import random
 import threading
 import traceback
+import webbrowser
 from customtkinter import *
 from spotipy.oauth2 import SpotifyClientCredentials,SpotifyOAuth
 import spotipy
@@ -32,20 +33,97 @@ def cleanup():
             print(f"Error deleting {mp4_file}: {e}")
 
 
-#APP CONSTANTS PROCEED WITH CAUTION
-with open("APP.CRED","rb") as f:
-    rec = pickle.load(f)
-    CLIENT_ID = rec[0]
-    CLIENT_SECRET = rec[1]
+
+            
+if os.path.exists("APP.CRED"):
+    with open("APP.CRED","rb") as f:
+        rec = pickle.load(f)
+        CLIENT_ID = rec[0]
+        CLIENT_SECRET = rec[1]
+else:
+    print("LOG: No Credentials On File")
+    secret = CTk()
+    secret.title("Credentials")
+
+    def add_users(cid):
+        webbrowser.open("https://developer.spotify.com/dashboard/"+cid+"/users")
+
+    def instructions():
+        webbrowser.open('https://www.youtube.com/watch?v=mBgg9i1ghNw') 
+
+    def done():
+        if id_entry.get() == "":
+            error.configure(text = "Client ID is Empty")
+        elif id_entry.get() == "":
+            error.configure(text = "Client ID is Empty")
+        else:
+            try:
+                ccm = SpotifyClientCredentials(client_id=id_entry.get(), client_secret=secret_entry.get())
+                s = spotipy.Spotify(client_credentials_manager=ccm)
+
+                with open("APP.CRED","wb") as f:
+                    rec = [id_entry.get(),secret_entry.get()]
+                    pickle.dump(rec,f)
+
+                for child in secret.winfo_children():
+                    child.destroy()
+                
+                CTkTextbox(secret,text = "Logged in Succesfully \n In Order to use the app all users that need to login must be added").pack()
+                CTkButton(secret,text = "Add Users", command= partial(add_users,id_entry.get()))
+                CTkButton(text = "Done",command= secret.destroy())
+
+            except Exception as e:
+                error.configure(text = "Invalid Credentials :",end = " ")
+                traceback.format_exception(e)
+        
+
+
+    CTkLabel(secret,text = "In Order to use this app you must login using app credentials, Dont know how to get them click instructions").pack()
+    CTkButton(secret,text = "Instructions",command=instructions).pack()
+
+    CTkLabel(secret,text = "Client ID").pack()
+    id_entry = CTkEntry(secret)
+    id_entry.pack()
+
+    CTkLabel(secret,text = "Client Secret").pack()
+    secret_entry = CTkEntry(secret)
+    secret_entry.pack()
+
+    go = CTkButton(secret,text = "Done",command=done)
+    go.pack()
+
+    error = CTkLabel(secret,text = "                      ")
+    error.pack()
+
+    secret.mainloop()
+
+#APP CONSTANTS PROCEED WITH CAUTION-------------
 
 POPULARITY_CONSTRAINT = 80
+#Popularity of songs above which it must be allowed to play, applies only for selection based by artist
+#Reccomended value = 60 - 80
+
 PROFANITY_ALLOWED= False
+#Sets if profanity is allowed in NAME of song, NOT lyrics
+#Accepted values = True, False
+
 EXCLUDE_WORDS= ["Skit","Version", "Instrumental", "Interlude","Acapella","Extended","Acoustic","Remix","Demo","Intro","Medley", "Original Mix", "Radio Edit", "Extended Mix", "Club Mix", "Dance Remix", "Acoustic Version", "Instrumental Version", "Vocal Version", "Remix Version", "Official Video", "Live Performance", "Studio Recording", "Unplugged Version", "Demo Version", "Karaoke Version", "Single Version", "Album Version", "Explicit Version", "Clean Version", "Radio Version"]
+#Exclude songs with Certain Words in their title, list of strings
+#Only Applies to selection based on artist
+
 EXCLUDE_REPETITION_OF = {"(":2}
-redirect_uri = 'http://localhost:8080/callback/'
+#Excludes repetition of a certain charecter or word, say '(', given number of times
+#Usage : Add needed to dictionary with the charecter/word as key and number of repetitions or greater you want to exclude
+
+SONG_RECCOMENDATION_RATIO = 2 
+#Number of songs to reccomed for every 5 songs you have in your library, higher value = higher difficulty 
+#recomended value = 2 
+
+redirect_uri = 'http://localhost:3036'
+#-----------------------------------------------
 
 
-#
+
 songnames = []
 links = []
 artistsSelected = dict()
