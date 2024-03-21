@@ -12,7 +12,6 @@ import pytube
 import youtube_dl
 from functools import partial
 import time as t
-from better_profanity import profanity
 import math
 
 popularity_cache = dict()
@@ -116,9 +115,7 @@ POPULARITY_CONSTRAINT = 80
 #Popularity of songs above which it must be allowed to play, applies only for selection based by artist
 #Reccomended value = 60 - 80
 
-PROFANITY_ALLOWED= False
-#Sets if profanity is allowed in NAME of song, NOT lyrics
-#Accepted values = True, False
+
 
 EXCLUDE_WORDS= ["Skit","Version", "Instrumental", "Interlude","Acapella","Extended","Acoustic","Remix","Demo","Intro","Medley", "Original Mix", "Radio Edit", "Extended Mix", "Club Mix", "Dance Remix", "Acoustic Version", "Instrumental Version", "Vocal Version", "Remix Version", "Official Video", "Live Performance", "Studio Recording", "Unplugged Version", "Demo Version", "Karaoke Version", "Single Version", "Album Version", "Explicit Version", "Clean Version", "Radio Version"]
 #Exclude songs with Certain Words in their title, list of strings
@@ -145,7 +142,7 @@ song_ids_for_seed = list()
 
 
 client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager,retries=0)
 
 def check_song_popularity(song_name):
     global sp
@@ -292,10 +289,6 @@ def select_option(option):
                     songnames.remove(i)
                     print("Song -",i,"removed due to low popularity")
 
-            if PROFANITY_ALLOWED == False:
-                for i in songnames:
-                    if profanity.contains_profanity(i):
-                        songnames.remove(i)
 
             for i in songnames:
                 for j in EXCLUDE_WORDS:
@@ -316,8 +309,12 @@ def select_option(option):
 
             threading.Thread(target = get_yt_links,daemon= True).start()
             t.sleep(10)
-            waitlabel.configure(text = "Done! Click Continue")
-            kill.configure(state = 'normal')
+            try:
+                kill.configure(state = 'normal')
+                waitlabel.configure(text = "Done! Click Continue")
+            except:
+                pass
+            
 
 
 
@@ -397,9 +394,9 @@ def select_option(option):
             
             seed_lists = [song_ids_for_seed[5*i:5*i+5] for i in range(0,math.ceil(len(song_ids_for_seed)/5))]
 
-            print(len(seed_lists))
             
             for seed_list in seed_lists:
+                
                 recommendations = sp.recommendations(seed_tracks=seed_list, limit=2)
                 recommended_songs = [(track['name'] + " - " + track["artists"][0]["name"]) for track in recommendations['tracks']]
                 songnames += recommended_songs
@@ -415,10 +412,6 @@ def select_option(option):
             get_tracks_list()
             print("Songs after recomendation :",len(songnames))
 
-            if PROFANITY_ALLOWED == False:
-                for i in songnames:
-                    if profanity.contains_profanity(i):
-                        songnames.remove(i)
 
             songnames = list(set(songnames)) #removes dupicates
 
@@ -431,8 +424,12 @@ def select_option(option):
 
             threading.Thread(target = get_yt_links,daemon= True).start()
             t.sleep(10)
-            waitlabel.configure(text = "Done! Click Continue")
-            kill.configure(state = 'normal')
+            try:
+                kill.configure(state = 'normal')
+                waitlabel.configure(text = "Done! Click Continue")
+            except:
+                pass
+            
 
 
 
@@ -482,7 +479,9 @@ def play_random_segment(youtube_link):
         audio_stream = youtube.streams.filter(only_audio=True).first()
         audio_stream.download()
         start_time = random.randint(10, int(youtube.length))
-        ffplay_process = subprocess.Popen(["ffplay", "-nodisp", "-ss", str(start_time-12), "-t", "12", audio_stream.default_filename])
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        ffplay_process = subprocess.Popen(["ffplay", "-nodisp", "-ss", str(start_time-12), "-t", "12", audio_stream.default_filename],stdout=open(os.devnull, 'w'), stderr=subprocess.STDOUT,startupinfo=startupinfo)
         timer.stop()
         timer.reset_ticks()
         timer.start()
